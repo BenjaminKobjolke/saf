@@ -491,18 +491,44 @@ internal class DocumentFileApi(private val plugin: SafPlugin) :
         val cacheDirectoryName = call.argument<String>("cacheDirectoryName")
         val fileType = call.argument<String>("fileType")
   
-        var cachedFilesPath = listOf<String>()
+        var cachedFilesPath = mutableListOf<String>()
         
         val sourceTreeUri: Uri = Uri.parse(sourceTreeUriString)
-        val sourceChildDocumentsUri = buildChildDocumentsUriUsingTree(sourceTreeUri, context.contentResolver)
-        for (uri in sourceChildDocumentsUri!!) {
-          val fileName = nameFromFileUri(uri).toString()
-          if(fileName.contains(fileType.toString()) || fileType == "any") {
-            val copiedPath: String? = util.syncCopyFileToExternalStorage(uri, cacheDirectoryName!!, fileName)
-            if(copiedPath != null) cachedFilesPath += copiedPath.toString()
+        
+        // Use recursive traversal to get all files from subdirectories
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+          traverseDirectoryEntries(
+            context.contentResolver,
+            rootOnly = false, // Enable recursive traversal
+            rootUri = sourceTreeUri,
+            columns = arrayOf(
+              DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+              DocumentsContract.Document.COLUMN_MIME_TYPE,
+              DocumentsContract.Document.COLUMN_LAST_MODIFIED
+            )
+          ) { data ->
+            val metadata = data["metadata"] as Map<*, *>
+            val fileData = data["data"] as Map<*, *>
+            val isDirectory = metadata["isDirectory"] as Boolean?
+            val uri = metadata["uri"] as String
+            val mime = fileData[DocumentsContract.Document.COLUMN_MIME_TYPE] as String?
+            
+            // Only process files (not directories) that match the file type filter
+            if (isDirectory == false && mime != null) {
+              if (fileType == "any" || mime.startsWith("image/") || mime.startsWith("audio/") || mime.startsWith("video/") || mime.startsWith("text/") || mime.startsWith("application/")) {
+                val fileName = nameFromFileUri(Uri.parse(uri))
+                if (fileName != null) {
+                  val copiedPath: String? = util.syncCopyFileToExternalStorage(Uri.parse(uri), cacheDirectoryName!!, fileName)
+                  if (copiedPath != null) {
+                    cachedFilesPath.add(copiedPath)
+                  }
+                }
+              }
+            }
           }
         }
-        result.success(cachedFilesPath)
+        
+        result.success(cachedFilesPath.toList())
       } catch (e: Exception) {
         Log.e("CACHING_EXCEPTION", e.message!!)
         result.success(null)
@@ -536,7 +562,30 @@ internal class DocumentFileApi(private val plugin: SafPlugin) :
         val cacheDirectoryName = call.argument<String>("cacheDirectoryName")
         
         val sourceTreeUri: Uri = Uri.parse(sourceTreeUriString)
-        var sourceChildDocumentsUri = buildChildDocumentsUriUsingTree(sourceTreeUri, context.contentResolver)
+        val sourceFileUris = mutableListOf<Uri>()
+  
+        // Use recursive traversal to get all files from subdirectories
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+          traverseDirectoryEntries(
+            context.contentResolver,
+            rootOnly = false, // Enable recursive traversal
+            rootUri = sourceTreeUri,
+            columns = arrayOf(
+              DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+              DocumentsContract.Document.COLUMN_MIME_TYPE,
+              DocumentsContract.Document.COLUMN_LAST_MODIFIED
+            )
+          ) { data ->
+            val metadata = data["metadata"] as Map<*, *>
+            val isDirectory = metadata["isDirectory"] as Boolean?
+            val uri = metadata["uri"] as String
+            
+            // Only add files (not directories)
+            if (isDirectory == false) {
+              sourceFileUris.add(Uri.parse(uri))
+            }
+          }
+        }
   
         val externalFilesDir: File = context.getExternalFilesDir(null)!!
         val appCacheDirectory: File = File(externalFilesDir.path + "/" + cacheDirectoryName)
@@ -547,7 +596,7 @@ internal class DocumentFileApi(private val plugin: SafPlugin) :
           }
         }
         val sourceFilesNameToBooleanMap: HashMap<String, Boolean> = HashMap<String, Boolean>()
-        for (uri in sourceChildDocumentsUri!!) {
+        for (uri in sourceFileUris) {
           sourceFilesNameToBooleanMap[nameFromFileUri(uri).toString()] = true
         }
   
@@ -557,7 +606,7 @@ internal class DocumentFileApi(private val plugin: SafPlugin) :
           }
         }
   
-        for (uri in sourceChildDocumentsUri) {
+        for (uri in sourceFileUris) {
           util.syncCopyFileToExternalStorage(uri, cacheDirectoryName!!, nameFromFileUri(uri).toString())
         }
         Handler(Looper.getMainLooper()).post {
@@ -577,7 +626,30 @@ internal class DocumentFileApi(private val plugin: SafPlugin) :
         val cacheDirectoryName = call.argument<String>("cacheDirectoryName")
         
         val sourceTreeUri: Uri = Uri.parse(sourceTreeUriString)
-        var sourceChildDocumentsUri = buildChildDocumentsUriUsingTree(sourceTreeUri, context.contentResolver)
+        val sourceFileUris = mutableListOf<Uri>()
+  
+        // Use recursive traversal to get all files from subdirectories
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+          traverseDirectoryEntries(
+            context.contentResolver,
+            rootOnly = false, // Enable recursive traversal
+            rootUri = sourceTreeUri,
+            columns = arrayOf(
+              DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+              DocumentsContract.Document.COLUMN_MIME_TYPE,
+              DocumentsContract.Document.COLUMN_LAST_MODIFIED
+            )
+          ) { data ->
+            val metadata = data["metadata"] as Map<*, *>
+            val isDirectory = metadata["isDirectory"] as Boolean?
+            val uri = metadata["uri"] as String
+            
+            // Only add files (not directories)
+            if (isDirectory == false) {
+              sourceFileUris.add(Uri.parse(uri))
+            }
+          }
+        }
   
         val externalFilesDir: File = context.getExternalFilesDir(null)!!
         val appCacheDirectory: File = File(externalFilesDir.path + "/" + cacheDirectoryName)
@@ -588,7 +660,7 @@ internal class DocumentFileApi(private val plugin: SafPlugin) :
           }
         }
         val sourceFilesNameToBooleanMap: HashMap<String, Boolean> = HashMap<String, Boolean>()
-        for (uri in sourceChildDocumentsUri!!) {
+        for (uri in sourceFileUris) {
           sourceFilesNameToBooleanMap[nameFromFileUri(uri).toString()] = true
         }
   
@@ -598,7 +670,7 @@ internal class DocumentFileApi(private val plugin: SafPlugin) :
           }
         }
   
-        for (uri in sourceChildDocumentsUri) {
+        for (uri in sourceFileUris) {
           util.syncCopyFileToExternalStorage(uri, cacheDirectoryName!!, nameFromFileUri(uri).toString())
         }
         result.success(true)

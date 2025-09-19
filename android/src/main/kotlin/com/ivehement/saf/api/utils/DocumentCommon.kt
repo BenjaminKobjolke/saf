@@ -164,16 +164,22 @@ fun traverseDirectoryEntries(
   rootOnly: Boolean,
   block: (data: Map<String, Any>) -> Unit
 ) {
+  Log.d("SAF_TRAVERSE", "Starting traverseDirectoryEntries with rootUri: $rootUri, rootOnly: $rootOnly")
+  
   val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
     rootUri,
     DocumentsContract.getTreeDocumentId(rootUri)
   )
+  
+  Log.d("SAF_TRAVERSE", "Built childrenUri: $childrenUri")
 
   /// Keep track of our directory hierarchy
   val dirNodes = mutableListOf<Pair<Uri, Uri>>(Pair(rootUri, childrenUri))
+  Log.d("SAF_TRAVERSE", "Initial dirNodes size: ${dirNodes.size}")
 
   while (dirNodes.isNotEmpty()) {
     val (parent, children) = dirNodes.removeAt(0)
+    Log.d("SAF_TRAVERSE", "Processing directory node: parent=$parent, children=$children")
 
     val requiredColumns = if (rootOnly) emptyArray() else arrayOf(
       DocumentsContract.Document.COLUMN_MIME_TYPE,
@@ -181,6 +187,7 @@ fun traverseDirectoryEntries(
     )
 
     val projection = arrayOf(*columns, *requiredColumns).toSet().toTypedArray()
+    Log.d("SAF_TRAVERSE", "Query projection: ${projection.joinToString()}")
 
     val cursor = contentResolver.query(
       children,
@@ -189,21 +196,37 @@ fun traverseDirectoryEntries(
       null,
       null,
       null
-    ) ?: return
+    )
+    
+    if (cursor == null) {
+      Log.w("SAF_TRAVERSE", "Cursor is null for children URI: $children")
+      return
+    }
+    
+    Log.d("SAF_TRAVERSE", "Cursor created successfully, count: ${cursor.count}")
 
     try {
       while (cursor.moveToNext()) {
         val data = mutableMapOf<String, Any>()
 
-        for (column in columns) {
-          data[column] = cursorHandlerOf(typeOfColumn(column)!!)(
-            cursor,
-            cursor.getColumnIndexOrThrow(column)
-          )
+        for (column in projection) {
+          try {
+            val columnIndex = cursor.getColumnIndex(column)
+            if (columnIndex >= 0) {
+              data[column] = cursorHandlerOf(typeOfColumn(column)!!)(
+                cursor,
+                columnIndex
+              )
+            }
+          } catch (e: Exception) {
+            Log.w("SAF_TRAVERSE", "Failed to get column $column: ${e.message}")
+          }
         }
 
         val mimeType = data[DocumentsContract.Document.COLUMN_MIME_TYPE] as String?
-        val id = data[DocumentsContract.Document.COLUMN_DOCUMENT_ID] as String as String?
+        val id = data[DocumentsContract.Document.COLUMN_DOCUMENT_ID] as String?
+        
+        Log.d("SAF_TRAVERSE", "Raw cursor data - mimeType: $mimeType, id: $id")
 
         val isDirectory = if (mimeType != null) isDirectory(mimeType) else null
 

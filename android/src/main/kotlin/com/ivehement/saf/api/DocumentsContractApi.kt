@@ -36,44 +36,40 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
           val sourceTreeUri = Uri.parse(call.argument<String>("sourceTreeUriString"))
           val fileType = call.argument<String>("fileType")
         if(Build.VERSION.SDK_INT >= 21) {
-            val parentUri = DocumentsContract.buildChildDocumentsUriUsingTree(sourceTreeUri, DocumentsContract.getTreeDocumentId(sourceTreeUri))
             val contentResolver: ContentResolver = plugin.context.contentResolver
-            var childrenUris = listOf<String>()
-            val cursor = contentResolver.query(
-              parentUri, arrayOf(
+            var childrenUris = mutableListOf<String>()
+            
+            // Use the recursive traverseDirectoryEntries function to get all files recursively
+            traverseDirectoryEntries(
+              contentResolver,
+              rootOnly = false, // Set to false to enable recursive traversal
+              rootUri = sourceTreeUri,
+              columns = arrayOf(
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                 DocumentsContract.Document.COLUMN_MIME_TYPE,
                 DocumentsContract.Document.COLUMN_LAST_MODIFIED
-                ),
-                null, null, null
-                )
-            try {
-              while (cursor!!.moveToNext()) {
-                val docId = cursor.getString(0)
-                val mime = cursor.getString(1)
-                if (FILETYPES.contains(mime) || fileType == "any") {
-                    val eachUri =
-                        DocumentsContract.buildChildDocumentsUriUsingTree(
-                            parentUri,
-                            docId
-                        ).toString().replace("/children", "")
-                        childrenUris += eachUri
-                      }
+              )
+            ) { data ->
+              val metadata = data["metadata"] as Map<*, *>
+              val fileData = data["data"] as Map<*, *>
+              val isDirectory = metadata["isDirectory"] as Boolean?
+              val uri = metadata["uri"] as String
+              val mime = fileData[DocumentsContract.Document.COLUMN_MIME_TYPE] as String?
+              
+              // Only add files (not directories) that match the file type filter
+              if (isDirectory == false) {
+                val typeMatches = if (mime != null) {
+                  fileType == "any" || mime.startsWith("image/") || mime.startsWith("audio/") || mime.startsWith("video/") || mime.startsWith("text/") || mime.startsWith("application/")
+                } else {
+                  fileType == "any"
                 }
+                if (typeMatches) {
+                  childrenUris.add(uri)
+                }
+              }
             }
-            catch(e: Exception) {
-              Log.e("CONTENT_RESOLVER_EXCEPTION: ", e.message!!)
-            }
-            finally {
-              if (cursor != null) {
-                  try {
-                      cursor.close()
-                  } catch (re: RuntimeException) {
-                      
-                  }
-              } 
-            }
-            result.success(childrenUris)
+            
+            result.success(childrenUris.toList())
           }
           else {
             result.notSupported(call.method, API_21)
@@ -88,53 +84,87 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
         try {
           val sourceTreeUri = Uri.parse(call.argument<String>("sourceTreeUriString"))
           val fileType = call.argument<String>("fileType")
+          Log.d("SAF_DEBUG", "Starting BUID_CHILD_DOCUMENTS_PATH_USING_TREE with URI: $sourceTreeUri, fileType: $fileType")
+          
           if(Build.VERSION.SDK_INT >= 21) {
-            val parentUri = DocumentsContract.buildChildDocumentsUriUsingTree(sourceTreeUri, DocumentsContract.getTreeDocumentId(sourceTreeUri))
             val contentResolver: ContentResolver = plugin.context.contentResolver
-            var childrenPaths = listOf<String>()
-            val cursor = contentResolver.query(
-                        parentUri, arrayOf(
-                            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                            DocumentsContract.Document.COLUMN_MIME_TYPE,
-                            DocumentsContract.Document.COLUMN_LAST_MODIFIED
-                        ),
-                        null, null, null
-                    )
-            try {
-              while (cursor!!.moveToNext()) {
-              val docId = cursor.getString(0)
-              val mime = cursor.getString(1)
-              // val lastModified = cursor.getString(2)
-              if (FILETYPES.contains(mime) || fileType == "any") {
-                  val child =
-                        DocumentsContract.buildChildDocumentsUriUsingTree(
-                            parentUri,
-                            docId
-                        ).toString().replace("/children", "")
-                        childrenPaths += util?.getPath(Uri.parse(child))!!
+            var childrenPaths = mutableListOf<String>()
+            var totalItemsFound = 0
+            var filesFound = 0
+            var directoriesFound = 0
+            
+            // Use the recursive traverseDirectoryEntries function to get all files recursively
+            traverseDirectoryEntries(
+              contentResolver,
+              rootOnly = false, // Set to false to enable recursive traversal
+              rootUri = sourceTreeUri,
+              columns = arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED
+              )
+            ) { data ->
+              totalItemsFound++
+              val metadata = data["metadata"] as Map<*, *>
+              val fileData = data["data"] as Map<*, *>
+              val isDirectory = metadata["isDirectory"] as Boolean?
+              val uri = metadata["uri"] as String
+              val mime = fileData[DocumentsContract.Document.COLUMN_MIME_TYPE] as String?
+              
+              Log.d("SAF_DEBUG", "Found item #$totalItemsFound: URI=$uri, isDirectory=$isDirectory, mime=$mime")
+              
+              if (isDirectory == true) {
+                directoriesFound++
+              } else if (isDirectory == false) {
+                filesFound++
+                // If MIME type is null, try to determine from file extension or accept if fileType is "any"
+                val typeMatches = if (mime != null) {
+                  fileType == "any" || mime.startsWith("image/") || mime.startsWith("audio/") || mime.startsWith("video/") || mime.startsWith("text/") || mime.startsWith("application/")
+                } else {
+                  // For null MIME types, check file extension or accept if fileType is "any"
+                  if (fileType == "any") {
+                    true
+                  } else {
+                    // Extract filename from URI and check extension
+                    val fileName = uri.substringAfterLast("/").substringAfterLast("%2F")
+                    val extension = fileName.substringAfterLast(".", "").lowercase()
+                    when (extension) {
+                      "mp3", "m4a", "m4b", "wav", "flac", "aac", "ogg" -> fileType == "audio"
+                      "mp4", "avi", "mkv", "mov", "wmv" -> fileType == "video"
+                      "jpg", "jpeg", "png", "gif", "bmp", "webp" -> fileType == "image"
+                      "txt", "pdf", "doc", "docx" -> fileType == "text" || fileType == "application"
+                      else -> fileType == "any"
+                    }
+                  }
+                }
+                
+                Log.d("SAF_DEBUG", "File mime check: $mime, typeMatches: $typeMatches, fileType: $fileType, uri: $uri")
+                
+                if (typeMatches) {
+                  val filePath = util?.getPath(Uri.parse(uri))
+                  Log.d("SAF_DEBUG", "File path resolved: $filePath")
+                  if (filePath != null) {
+                    childrenPaths.add(filePath)
+                    Log.d("SAF_DEBUG", "Added file to results: $filePath")
+                  } else {
+                    Log.w("SAF_DEBUG", "Could not resolve path for URI: $uri")
+                  }
+                } else {
+                  Log.d("SAF_DEBUG", "File filtered out due to type mismatch")
                 }
               }
             }
-            catch(e: Exception) {
-              Log.e("CONTENT_RESOLVER_EXCEPTION: ", e.message!!)
-            }
-            finally {
-              if (cursor != null) {
-                  try {
-                      cursor.close()
-                  } catch (re: RuntimeException) {
-                      Log.e("RUNTIME_EXCEPTION", re.message!!)
-                  }
-              }
-            }
-            result.success(childrenPaths)
+            
+            Log.d("SAF_DEBUG", "Traversal complete. Total items: $totalItemsFound, Files: $filesFound, Directories: $directoriesFound, Paths added: ${childrenPaths.size}")
+            result.success(childrenPaths.toList())
           }
           else {
+            Log.e("SAF_DEBUG", "Android version not supported: ${Build.VERSION.SDK_INT}")
             result.notSupported(call.method, API_21)
           }
         }
         catch(e: Exception) {
-          Log.e("BUID_CHILD_DOCUMENTS_PATH_USING_TREE_EXCEPTION: ", e.message!!)
+          Log.e("BUID_CHILD_DOCUMENTS_PATH_USING_TREE_EXCEPTION", "Exception occurred: ${e.message}", e)
           result.success(null)
         }
       }
