@@ -1,3 +1,8 @@
+## 1.0.3+4
+
+* Minor fixes and improvements
+* Updated dependencies
+
 ## 1.0.1+4
 
 * Updated permission_handler and misc
