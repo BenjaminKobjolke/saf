@@ -1,7 +1,7 @@
-## 1.0.3+4
+## 1.0.4
 
 * Minor fixes and improvements
-* Updated dependencies
+* Prepared for pub.dev publishing
 
 ## 1.0.1+4
 
