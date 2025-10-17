@@ -59,6 +59,11 @@ internal class DocumentFileApi(private val plugin: SafPlugin) :
           Thread(cacheToExternalFilesDir(call, result, plugin.context, util!!)).start()
         }
       }
+      CACHE_CURRENT_DIRECTORY_MEDIA -> {
+        if (Build.VERSION.SDK_INT >= API_21) {
+          Thread(cacheCurrentDirectoryMedia(call, result, plugin.context, util!!)).start()
+        }
+      }
       SINGLE_CACHE_TO_EXTERNAL_FILES_DIRECTORY -> {
         if (Build.VERSION.SDK_INT >= API_21) {
           singleCacheToExternalFilesDir(call, result, util!!)
@@ -490,11 +495,11 @@ internal class DocumentFileApi(private val plugin: SafPlugin) :
         val sourceTreeUriString = call.argument<String>("sourceTreeUriString")
         val cacheDirectoryName = call.argument<String>("cacheDirectoryName")
         val fileType = call.argument<String>("fileType")
-  
+
         var cachedFilesPath = mutableListOf<String>()
-        
+
         val sourceTreeUri: Uri = Uri.parse(sourceTreeUriString)
-        
+
         // Use recursive traversal to get all files from subdirectories
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
           traverseDirectoryEntries(
@@ -512,7 +517,7 @@ internal class DocumentFileApi(private val plugin: SafPlugin) :
             val isDirectory = metadata["isDirectory"] as Boolean?
             val uri = metadata["uri"] as String
             val mime = fileData[DocumentsContract.Document.COLUMN_MIME_TYPE] as String?
-            
+
             // Only process files (not directories) that match the file type filter
             if (isDirectory == false && mime != null) {
               if (fileType == "any" || mime.startsWith("image/") || mime.startsWith("audio/") || mime.startsWith("video/") || mime.startsWith("text/") || mime.startsWith("application/")) {
@@ -527,10 +532,70 @@ internal class DocumentFileApi(private val plugin: SafPlugin) :
             }
           }
         }
-        
+
         result.success(cachedFilesPath.toList())
       } catch (e: Exception) {
         Log.e("CACHING_EXCEPTION", e.message!!)
+        result.success(null)
+      }
+    }
+  }
+
+  internal class cacheCurrentDirectoryMedia(private val call: MethodCall, private val result: MethodChannel.Result, private val context: Context, private val util: SafUtil): Runnable {
+    override fun run() {
+      try {
+        val sourceTreeUriString = call.argument<String>("sourceTreeUriString")
+        val fileType = call.argument<String>("fileType") ?: "any"
+
+        var cachedFilesPath = mutableListOf<String>()
+
+        val sourceTreeUri: Uri = Uri.parse(sourceTreeUriString)
+
+        // Use NON-recursive traversal to get files from current directory only
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+          traverseDirectoryEntries(
+            context.contentResolver,
+            rootOnly = true, // Non-recursive - current directory only!
+            rootUri = sourceTreeUri,
+            columns = arrayOf(
+              DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+              DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+              DocumentsContract.Document.COLUMN_MIME_TYPE,
+              DocumentsContract.Document.COLUMN_LAST_MODIFIED
+            )
+          ) { data ->
+            val metadata = data["metadata"] as Map<*, *>
+            val fileData = data["data"] as Map<*, *>
+            val isDirectory = metadata["isDirectory"] as Boolean?
+            val uri = metadata["uri"] as String
+            val mime = fileData[DocumentsContract.Document.COLUMN_MIME_TYPE] as String?
+            val displayName = fileData[DocumentsContract.Document.COLUMN_DISPLAY_NAME] as String?
+
+            // Only process media files (not directories)
+            if (isDirectory == false && mime != null) {
+              val isMediaFile = mime.startsWith("image/") || mime.startsWith("video/")
+              val matchesFilter = fileType == "any" || isMediaFile
+
+              if (matchesFilter && isMediaFile) {
+                // Use display name if available, fallback to extracting from URI
+                val fileName = displayName ?: nameFromFileUri(Uri.parse(uri)) ?: "unknown_${System.currentTimeMillis()}"
+
+                // Cache to temp directory for on-demand viewing
+                val cacheDir = "saf_media_temp"
+                val copiedPath: String? = util.syncCopyFileToExternalStorage(Uri.parse(uri), cacheDir, fileName)
+                if (copiedPath != null) {
+                  cachedFilesPath.add(copiedPath)
+                  Log.d("SAF_CACHE", "Cached media file: $fileName -> $copiedPath")
+                }
+              }
+            }
+          }
+        }
+
+        Log.d("SAF_CACHE", "Total cached files: ${cachedFilesPath.size}")
+        result.success(cachedFilesPath.toList())
+      } catch (e: Exception) {
+        Log.e("CACHE_CURRENT_DIR_EXCEPTION", "Failed to cache current directory media: ${e.message}", e)
         result.success(null)
       }
     }

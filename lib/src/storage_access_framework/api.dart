@@ -593,6 +593,30 @@ Future<DocumentFile?> copy(Uri uri, Uri destination) async {
   return DocumentFile.fromMap(duplicatedFile);
 }
 
+/// Cache media files from current directory only (non-recursive)
+/// Returns list of cached file paths that can be used with FileImage/VideoPlayerController
+///
+/// This is useful for viewing media files from USB/SD card via SAF
+/// Files are cached to app's temp directory for viewing
+Future<List<String>?> cacheCurrentDirectoryMedia(
+  String treeUriString, {
+  String fileType = "any",
+}) async {
+  const kCacheCurrentDir = 'cacheCurrentDirectoryMedia';
+  const kSourceTreeUriString = 'sourceTreeUriString';
+  const kFileType = 'fileType';
+
+  final args = <String, dynamic>{
+    kSourceTreeUriString: treeUriString,
+    kFileType: fileType,
+  };
+
+  final paths = await kDocumentFileChannel.invokeMethod<List<dynamic>?>(
+    kCacheCurrentDir, args);
+  if (paths == null) return null;
+  return List<String>.from(paths);
+}
+
 /// Get content of a given document `uri`
 ///
 /// Equivalent to `contentDescriptor` usage
