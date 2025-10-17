@@ -66,10 +66,10 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
             var directoriesFound = 0
 
             Log.d("SAF_URI_DEBUG", "Starting traversal...")
-            // Use the recursive traverseDirectoryEntries function to get all items recursively
+            // Get only direct children of the current directory
             traverseDirectoryEntries(
               contentResolver,
-              rootOnly = false, // Set to false to enable recursive traversal
+              rootOnly = true, // Only get direct children, not recursive
               rootUri = sourceTreeUri,
               columns = arrayOf(
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,

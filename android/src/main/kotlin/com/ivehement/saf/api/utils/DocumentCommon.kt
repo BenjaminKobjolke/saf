@@ -239,11 +239,13 @@ fun traverseDirectoryEntries(
 
         block(createCursorRowMap(rootUri, parent, uri, data, isDirectory = isDirectory))
 
-        if (isDirectory != null && isDirectory) {
+        // Only traverse into subdirectories if rootOnly is false (recursive mode)
+        if (!rootOnly && isDirectory != null && isDirectory) {
           val nextChildren = DocumentsContract.buildChildDocumentsUriUsingTree(rootUri, id)
           val nextNode = Pair(uri, nextChildren)
 
           dirNodes.add(nextNode)
+          Log.d("SAF_TRAVERSE", "Added subdirectory to queue for recursive traversal: $uri")
         }
       }
     } finally {
