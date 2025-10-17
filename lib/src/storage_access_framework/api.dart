@@ -110,17 +110,18 @@ Future<List<String>?> getFilesUri(String treeUriString,
     const kGetFilesUri = "buildChildDocumentsUriUsingTree";
 
     const kFileType = "fileType";
-    const kTreeUriString = "treeUriString";
+    const kSourceTreeUriString = "sourceTreeUriString";
 
     final args = <String, dynamic>{
       kFileType: fileType,
-      kTreeUriString: treeUriString,
+      kSourceTreeUriString: treeUriString,
     };
     final paths = await kDocumentsContractChannel.invokeMethod<List<dynamic>>(
         kGetFilesUri, args);
     if (paths == null) return null;
     return List<String>.from(paths);
   } catch (e) {
+    print('getFilesUri error: $e');
     return null;
   }
 }
