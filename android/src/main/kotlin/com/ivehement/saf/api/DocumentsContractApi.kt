@@ -28,6 +28,16 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
   companion object {
     private const val CHANNEL = "documentscontract"
 
+    // Remove storage ID prefix from display name (e.g., "74D0-7424:GIT" -> "GIT")
+    private fun cleanDisplayName(displayName: String?): String? {
+      if (displayName == null) return null
+
+      // Remove storage ID prefix pattern: "XXXX-XXXX:" or similar
+      // Pattern matches: alphanumeric characters, dash, alphanumeric characters, colon
+      val cleaned = displayName.replace(Regex("^[A-Z0-9]+-[A-Z0-9]+:"), "")
+      return cleaned.ifEmpty { displayName }
+    }
+
     // Extract filename from URI when DISPLAY_NAME is not available
     private fun extractNameFromUri(uri: String): String {
       try {
@@ -92,8 +102,8 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
               if (isDirectory == true) {
                 directoriesFound++
                 if (includeFolders) {
-                  // Use display name if available, otherwise extract from URI
-                  val displayName = name ?: extractNameFromUri(uri)
+                  // Clean display name to remove storage ID prefix, fallback to URI extraction
+                  val displayName = cleanDisplayName(name) ?: extractNameFromUri(uri)
                   val item = mapOf(
                     "uri" to uri,
                     "name" to displayName,
@@ -114,8 +124,8 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
                 }
                 Log.d("SAF_URI_DEBUG", "  -> Is file, typeMatches=$typeMatches (fileType=$fileType, mime=$mime)")
                 if (typeMatches) {
-                  // Use display name if available, otherwise extract from URI
-                  val displayName = name ?: extractNameFromUri(uri)
+                  // Clean display name to remove storage ID prefix, fallback to URI extraction
+                  val displayName = cleanDisplayName(name) ?: extractNameFromUri(uri)
                   val item = mapOf(
                     "uri" to uri,
                     "name" to displayName,
