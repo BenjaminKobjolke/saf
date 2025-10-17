@@ -165,12 +165,18 @@ fun traverseDirectoryEntries(
   block: (data: Map<String, Any>) -> Unit
 ) {
   Log.d("SAF_TRAVERSE", "Starting traverseDirectoryEntries with rootUri: $rootUri, rootOnly: $rootOnly")
-  
+
+  // Extract the document ID (which includes subdirectory path for navigation)
+  // For tree URIs: getDocumentId extracts the full path (e.g., "74D0-7424:GIT")
+  // For document URIs: getDocumentId also extracts the full document path
+  val documentId = DocumentsContract.getDocumentId(rootUri)
+  Log.d("SAF_TRAVERSE", "Extracted documentId: $documentId")
+
   val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
     rootUri,
-    DocumentsContract.getTreeDocumentId(rootUri)
+    documentId
   )
-  
+
   Log.d("SAF_TRAVERSE", "Built childrenUri: $childrenUri")
 
   /// Keep track of our directory hierarchy
