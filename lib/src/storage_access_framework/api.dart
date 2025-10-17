@@ -8,18 +8,39 @@ import 'package:saf/src/storage_access_framework/partial_document_file.dart';
 import 'package:saf/src/storage_access_framework/uri_permission.dart';
 
 /// Convert Directory path to URI String
+/// Handles both internal storage (primary) and USB/SD card (UUID) paths
 String makeUriString({String path = "", bool isTreeUri = false}) {
+  String storageId = "primary";
+  String relativePath = path;
+
+  // Detect USB/SD card storage: /storage/UUID (where UUID is like 74D0-7424)
+  if (path.startsWith("/storage/")) {
+    final pathAfterStorage = path.substring("/storage/".length);
+    final segments = pathAfterStorage.split("/");
+
+    if (segments.isNotEmpty && segments[0].isNotEmpty) {
+      final firstSegment = segments[0];
+
+      // Check if it's a USB/SD card UUID (contains dash, not "emulated")
+      if (firstSegment.contains("-") && firstSegment != "emulated") {
+        storageId = firstSegment;
+        // Path after /storage/UUID - for root directory, use empty string
+        relativePath = segments.length > 1 ? segments.sublist(1).join("/") : "";
+      }
+    }
+  }
+
   String uri = "";
-  String base =
-      "content://com.android.externalstorage.documents/tree/primary%3A";
-  String documentUri = "/document/primary%3A" +
-      path.replaceAll("/", "%2F").replaceAll(" ", "%20");
+  String base = "content://com.android.externalstorage.documents/tree/$storageId%3A";
+  String documentUri = "/document/$storageId%3A" +
+      relativePath.replaceAll("/", "%2F").replaceAll(" ", "%20");
+
   if (isTreeUri) {
-    uri = base + path.replaceAll("/", "%2F").replaceAll(" ", "%20");
+    uri = base + relativePath.replaceAll("/", "%2F").replaceAll(" ", "%20");
   } else {
-    var pathSegments = path.split("/");
+    var pathSegments = relativePath.split("/");
     var fileName = pathSegments[pathSegments.length - 1];
-    var directory = path.split("/$fileName")[0];
+    var directory = relativePath.split("/$fileName")[0];
     uri = base +
         directory.replaceAll("/", "%2F").replaceAll(" ", "%20") +
         documentUri;
@@ -28,10 +49,24 @@ String makeUriString({String path = "", bool isTreeUri = false}) {
 }
 
 /// Convert URI String into Directory path
+/// Handles both internal storage (primary%3A) and USB/SD card (UUID%3A) URIs
 String makeDirectoryPath(String uriString) {
-  String directoryPathUriString = uriString.split("primary%3A")[1];
+  // Split by %3A (URL-encoded colon)
+  // URIs are like: content://.../tree/primary%3Apath or content://.../tree/XXXX-XXXX%3Apath
+  final parts = uriString.split("%3A");
+
+  if (parts.length < 2) {
+    // Fallback: if no %3A found, return empty
+    return "";
+  }
+
+  // Take everything after the first %3A
+  String directoryPathUriString = parts.sublist(1).join("%3A");
+
+  // Decode URL encoding
   String directoryPath =
       directoryPathUriString.replaceAll("%2F", "/").replaceAll("%20", " ");
+
   return directoryPath;
 }
 
