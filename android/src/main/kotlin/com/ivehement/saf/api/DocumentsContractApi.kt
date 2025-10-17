@@ -35,10 +35,16 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
         try {
           val sourceTreeUri = Uri.parse(call.argument<String>("sourceTreeUriString"))
           val fileType = call.argument<String>("fileType")
+          Log.d("SAF_URI_DEBUG", "Starting BUID_CHILD_DOCUMENTS_URI_USING_TREE with URI: $sourceTreeUri, fileType: $fileType")
+
         if(Build.VERSION.SDK_INT >= 21) {
             val contentResolver: ContentResolver = plugin.context.contentResolver
             var childrenUris = mutableListOf<String>()
-            
+            var totalItemsFound = 0
+            var filesFound = 0
+            var directoriesFound = 0
+
+            Log.d("SAF_URI_DEBUG", "Starting traversal...")
             // Use the recursive traverseDirectoryEntries function to get all files recursively
             traverseDirectoryEntries(
               contentResolver,
@@ -50,33 +56,48 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
                 DocumentsContract.Document.COLUMN_LAST_MODIFIED
               )
             ) { data ->
+              totalItemsFound++
               val metadata = data["metadata"] as Map<*, *>
               val fileData = data["data"] as Map<*, *>
               val isDirectory = metadata["isDirectory"] as Boolean?
               val uri = metadata["uri"] as String
               val mime = fileData[DocumentsContract.Document.COLUMN_MIME_TYPE] as String?
-              
+
+              Log.d("SAF_URI_DEBUG", "Found item #$totalItemsFound: URI=$uri, isDirectory=$isDirectory, mime=$mime")
+
               // Only add files (not directories) that match the file type filter
-              if (isDirectory == false) {
+              if (isDirectory == true) {
+                directoriesFound++
+                Log.d("SAF_URI_DEBUG", "  -> Is directory, skipping")
+              } else if (isDirectory == false) {
+                filesFound++
                 val typeMatches = if (mime != null) {
                   fileType == "any" || mime.startsWith("image/") || mime.startsWith("audio/") || mime.startsWith("video/") || mime.startsWith("text/") || mime.startsWith("application/")
                 } else {
                   fileType == "any"
                 }
+                Log.d("SAF_URI_DEBUG", "  -> Is file, typeMatches=$typeMatches (fileType=$fileType, mime=$mime)")
                 if (typeMatches) {
                   childrenUris.add(uri)
+                  Log.d("SAF_URI_DEBUG", "  -> Added to results!")
+                } else {
+                  Log.d("SAF_URI_DEBUG", "  -> Filtered out by type")
                 }
+              } else {
+                Log.d("SAF_URI_DEBUG", "  -> isDirectory is null/unknown")
               }
             }
-            
+
+            Log.d("SAF_URI_DEBUG", "Traversal complete. Total items: $totalItemsFound, Files: $filesFound, Directories: $directoriesFound, URIs added: ${childrenUris.size}")
             result.success(childrenUris.toList())
           }
           else {
+            Log.e("SAF_URI_DEBUG", "Android version not supported: ${Build.VERSION.SDK_INT}")
             result.notSupported(call.method, API_21)
           }
         }
         catch(e: Exception) {
-          Log.e("BUID_CHILD_DOCUMENTS_PATH_USING_TREE_EXCEPTION: ", e.message!!)
+          Log.e("SAF_URI_DEBUG", "Exception in BUID_CHILD_DOCUMENTS_URI_USING_TREE: ${e.message}", e)
           result.success(null)
         }
       }
