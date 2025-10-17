@@ -166,11 +166,18 @@ fun traverseDirectoryEntries(
 ) {
   Log.d("SAF_TRAVERSE", "Starting traverseDirectoryEntries with rootUri: $rootUri, rootOnly: $rootOnly")
 
-  // Extract the document ID (which includes subdirectory path for navigation)
-  // For tree URIs: getDocumentId extracts the full path (e.g., "74D0-7424:GIT")
-  // For document URIs: getDocumentId also extracts the full document path
-  val documentId = DocumentsContract.getDocumentId(rootUri)
-  Log.d("SAF_TRAVERSE", "Extracted documentId: $documentId")
+  // Extract the document ID based on URI structure
+  // Tree-only URI (root): content://.../tree/74D0-7424%3A → use getTreeDocumentId
+  // Document URI (subfolder): content://.../tree/.../document/... → use getDocumentId
+  val pathSegments = rootUri.pathSegments
+  val hasDocumentSegment = pathSegments.contains("document")
+
+  val documentId = if (hasDocumentSegment) {
+    DocumentsContract.getDocumentId(rootUri)
+  } else {
+    DocumentsContract.getTreeDocumentId(rootUri)
+  }
+  Log.d("SAF_TRAVERSE", "Extracted documentId: $documentId (hasDocumentSegment: $hasDocumentSegment)")
 
   val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
     rootUri,
