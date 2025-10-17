@@ -131,6 +131,15 @@ fun createCursorRowMap(
     }
   }
 
+  // Include critical raw columns that might not be in DocumentFileColumn enum
+  // These are needed for file type detection and display
+  if (data[DocumentsContract.Document.COLUMN_MIME_TYPE] != null) {
+    formattedData[DocumentsContract.Document.COLUMN_MIME_TYPE] = data[DocumentsContract.Document.COLUMN_MIME_TYPE]!!
+  }
+  if (data[DocumentsContract.Document.COLUMN_DISPLAY_NAME] != null) {
+    formattedData[DocumentsContract.Document.COLUMN_DISPLAY_NAME] = data[DocumentsContract.Document.COLUMN_DISPLAY_NAME]!!
+  }
+
   return mapOf(
     "data" to formattedData,
     "metadata" to mapOf(
