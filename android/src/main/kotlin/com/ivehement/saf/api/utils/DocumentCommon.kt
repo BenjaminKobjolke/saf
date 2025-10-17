@@ -133,12 +133,22 @@ fun createCursorRowMap(
 
   // Include critical raw columns that might not be in DocumentFileColumn enum
   // These are needed for file type detection and display
-  if (data[DocumentsContract.Document.COLUMN_MIME_TYPE] != null) {
-    formattedData[DocumentsContract.Document.COLUMN_MIME_TYPE] = data[DocumentsContract.Document.COLUMN_MIME_TYPE]!!
+  val mimeType = data[DocumentsContract.Document.COLUMN_MIME_TYPE]
+  val displayName = data[DocumentsContract.Document.COLUMN_DISPLAY_NAME]
+
+  Log.d("SAF_CURSOR_ROW", "createCursorRowMap - mimeType from data: $mimeType, displayName: $displayName")
+  Log.d("SAF_CURSOR_ROW", "createCursorRowMap - data keys: ${data.keys}")
+
+  if (mimeType != null) {
+    formattedData[DocumentsContract.Document.COLUMN_MIME_TYPE] = mimeType
+    Log.d("SAF_CURSOR_ROW", "Added MIME_TYPE to formattedData")
   }
-  if (data[DocumentsContract.Document.COLUMN_DISPLAY_NAME] != null) {
-    formattedData[DocumentsContract.Document.COLUMN_DISPLAY_NAME] = data[DocumentsContract.Document.COLUMN_DISPLAY_NAME]!!
+  if (displayName != null) {
+    formattedData[DocumentsContract.Document.COLUMN_DISPLAY_NAME] = displayName
+    Log.d("SAF_CURSOR_ROW", "Added DISPLAY_NAME to formattedData")
   }
+
+  Log.d("SAF_CURSOR_ROW", "formattedData keys after: ${formattedData.keys}")
 
   return mapOf(
     "data" to formattedData,
