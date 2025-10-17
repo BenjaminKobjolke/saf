@@ -27,6 +27,26 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
 
   companion object {
     private const val CHANNEL = "documentscontract"
+
+    // Extract filename from URI when DISPLAY_NAME is not available
+    private fun extractNameFromUri(uri: String): String {
+      try {
+        // URI format: content://.../document/STORAGE-ID%3Apath%2Fto%2Ffile
+        // Extract everything after %3A (encoded colon)
+        val afterColon = uri.substringAfter("%3A", "")
+        if (afterColon.isEmpty()) return "Unknown"
+
+        // Decode URL encoding
+        val decoded = java.net.URLDecoder.decode(afterColon, "UTF-8")
+
+        // Get last segment (filename)
+        val segments = decoded.split("/")
+        return segments.lastOrNull()?.takeIf { it.isNotEmpty() } ?: "Unknown"
+      } catch (e: Exception) {
+        Log.w("SAF_URI_DEBUG", "Failed to extract name from URI: $uri", e)
+        return "Unknown"
+      }
+    }
   }
 
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -72,14 +92,16 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
               if (isDirectory == true) {
                 directoriesFound++
                 if (includeFolders) {
+                  // Use display name if available, otherwise extract from URI
+                  val displayName = name ?: extractNameFromUri(uri)
                   val item = mapOf(
                     "uri" to uri,
-                    "name" to (name ?: "Unknown"),
+                    "name" to displayName,
                     "isDirectory" to true,
                     "mimeType" to mime
                   )
                   childrenItems.add(item)
-                  Log.d("SAF_URI_DEBUG", "  -> Added directory to results!")
+                  Log.d("SAF_URI_DEBUG", "  -> Added directory to results! name=$displayName")
                 } else {
                   Log.d("SAF_URI_DEBUG", "  -> Is directory, skipping (includeFolders=false)")
                 }
@@ -92,14 +114,16 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
                 }
                 Log.d("SAF_URI_DEBUG", "  -> Is file, typeMatches=$typeMatches (fileType=$fileType, mime=$mime)")
                 if (typeMatches) {
+                  // Use display name if available, otherwise extract from URI
+                  val displayName = name ?: extractNameFromUri(uri)
                   val item = mapOf(
                     "uri" to uri,
-                    "name" to (name ?: "Unknown"),
+                    "name" to displayName,
                     "isDirectory" to false,
                     "mimeType" to mime
                   )
                   childrenItems.add(item)
-                  Log.d("SAF_URI_DEBUG", "  -> Added file to results!")
+                  Log.d("SAF_URI_DEBUG", "  -> Added file to results! name=$displayName")
                 } else {
                   Log.d("SAF_URI_DEBUG", "  -> Filtered out by type")
                 }
