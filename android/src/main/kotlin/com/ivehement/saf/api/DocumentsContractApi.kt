@@ -51,7 +51,10 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
 
         // Get last segment (filename)
         val segments = decoded.split("/")
-        return segments.lastOrNull()?.takeIf { it.isNotEmpty() } ?: "Unknown"
+        val lastSegment = segments.lastOrNull()?.takeIf { it.isNotEmpty() } ?: "Unknown"
+
+        // Remove storage ID prefix if present (e.g., "74D0-7424:filename" -> "filename")
+        return lastSegment.replace(Regex("^[A-Z0-9]+-[A-Z0-9]+:"), "")
       } catch (e: Exception) {
         Log.w("SAF_URI_DEBUG", "Failed to extract name from URI: $uri", e)
         return "Unknown"
