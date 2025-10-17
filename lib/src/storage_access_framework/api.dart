@@ -103,23 +103,26 @@ Future<String?> openDocumentTree(
   return selectedDirectoryUri.toString();
 }
 
-/// Build Document URI's from tree URI
-Future<List<String>?> getFilesUri(String treeUriString,
-    {String fileType = "media"}) async {
+/// Build Document URI's from tree URI with metadata
+/// Returns List of Maps containing: uri, name, isDirectory, mimeType
+Future<List<Map<String, dynamic>>?> getFilesUri(String treeUriString,
+    {String fileType = "media", bool includeFolders = true}) async {
   try {
     const kGetFilesUri = "buildChildDocumentsUriUsingTree";
 
     const kFileType = "fileType";
     const kSourceTreeUriString = "sourceTreeUriString";
+    const kIncludeFolders = "includeFolders";
 
     final args = <String, dynamic>{
       kFileType: fileType,
       kSourceTreeUriString: treeUriString,
+      kIncludeFolders: includeFolders,
     };
-    final paths = await kDocumentsContractChannel.invokeMethod<List<dynamic>>(
+    final items = await kDocumentsContractChannel.invokeMethod<List<dynamic>>(
         kGetFilesUri, args);
-    if (paths == null) return null;
-    return List<String>.from(paths);
+    if (items == null) return null;
+    return items.map((item) => Map<String, dynamic>.from(item as Map)).toList();
   } catch (e) {
     print('getFilesUri error: $e');
     return null;

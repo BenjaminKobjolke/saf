@@ -35,23 +35,25 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
         try {
           val sourceTreeUri = Uri.parse(call.argument<String>("sourceTreeUriString"))
           val fileType = call.argument<String>("fileType")
-          Log.d("SAF_URI_DEBUG", "Starting BUID_CHILD_DOCUMENTS_URI_USING_TREE with URI: $sourceTreeUri, fileType: $fileType")
+          val includeFolders = call.argument<Boolean>("includeFolders") ?: true
+          Log.d("SAF_URI_DEBUG", "Starting BUID_CHILD_DOCUMENTS_URI_USING_TREE with URI: $sourceTreeUri, fileType: $fileType, includeFolders: $includeFolders")
 
         if(Build.VERSION.SDK_INT >= 21) {
             val contentResolver: ContentResolver = plugin.context.contentResolver
-            var childrenUris = mutableListOf<String>()
+            var childrenItems = mutableListOf<Map<String, Any?>>()
             var totalItemsFound = 0
             var filesFound = 0
             var directoriesFound = 0
 
             Log.d("SAF_URI_DEBUG", "Starting traversal...")
-            // Use the recursive traverseDirectoryEntries function to get all files recursively
+            // Use the recursive traverseDirectoryEntries function to get all items recursively
             traverseDirectoryEntries(
               contentResolver,
               rootOnly = false, // Set to false to enable recursive traversal
               rootUri = sourceTreeUri,
               columns = arrayOf(
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
                 DocumentsContract.Document.COLUMN_MIME_TYPE,
                 DocumentsContract.Document.COLUMN_LAST_MODIFIED
               )
@@ -61,14 +63,26 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
               val fileData = data["data"] as Map<*, *>
               val isDirectory = metadata["isDirectory"] as Boolean?
               val uri = metadata["uri"] as String
+              val name = fileData[DocumentsContract.Document.COLUMN_DISPLAY_NAME] as String?
               val mime = fileData[DocumentsContract.Document.COLUMN_MIME_TYPE] as String?
 
-              Log.d("SAF_URI_DEBUG", "Found item #$totalItemsFound: URI=$uri, isDirectory=$isDirectory, mime=$mime")
+              Log.d("SAF_URI_DEBUG", "Found item #$totalItemsFound: name=$name, URI=$uri, isDirectory=$isDirectory, mime=$mime")
 
-              // Only add files (not directories) that match the file type filter
+              // Add files and optionally folders
               if (isDirectory == true) {
                 directoriesFound++
-                Log.d("SAF_URI_DEBUG", "  -> Is directory, skipping")
+                if (includeFolders) {
+                  val item = mapOf(
+                    "uri" to uri,
+                    "name" to (name ?: "Unknown"),
+                    "isDirectory" to true,
+                    "mimeType" to mime
+                  )
+                  childrenItems.add(item)
+                  Log.d("SAF_URI_DEBUG", "  -> Added directory to results!")
+                } else {
+                  Log.d("SAF_URI_DEBUG", "  -> Is directory, skipping (includeFolders=false)")
+                }
               } else if (isDirectory == false) {
                 filesFound++
                 val typeMatches = if (mime != null) {
@@ -78,8 +92,14 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
                 }
                 Log.d("SAF_URI_DEBUG", "  -> Is file, typeMatches=$typeMatches (fileType=$fileType, mime=$mime)")
                 if (typeMatches) {
-                  childrenUris.add(uri)
-                  Log.d("SAF_URI_DEBUG", "  -> Added to results!")
+                  val item = mapOf(
+                    "uri" to uri,
+                    "name" to (name ?: "Unknown"),
+                    "isDirectory" to false,
+                    "mimeType" to mime
+                  )
+                  childrenItems.add(item)
+                  Log.d("SAF_URI_DEBUG", "  -> Added file to results!")
                 } else {
                   Log.d("SAF_URI_DEBUG", "  -> Filtered out by type")
                 }
@@ -88,8 +108,8 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
               }
             }
 
-            Log.d("SAF_URI_DEBUG", "Traversal complete. Total items: $totalItemsFound, Files: $filesFound, Directories: $directoriesFound, URIs added: ${childrenUris.size}")
-            result.success(childrenUris.toList())
+            Log.d("SAF_URI_DEBUG", "Traversal complete. Total items: $totalItemsFound, Files: $filesFound, Directories: $directoriesFound, Items added: ${childrenItems.size}")
+            result.success(childrenItems.toList())
           }
           else {
             Log.e("SAF_URI_DEBUG", "Android version not supported: ${Build.VERSION.SDK_INT}")
