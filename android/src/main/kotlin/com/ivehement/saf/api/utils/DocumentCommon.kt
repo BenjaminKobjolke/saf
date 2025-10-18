@@ -148,6 +148,13 @@ fun createCursorRowMap(
     Log.d("SAF_CURSOR_ROW", "Added DISPLAY_NAME to formattedData")
   }
 
+  // Explicitly add LAST_MODIFIED for sorting/filtering
+  val lastModified = data[DocumentsContract.Document.COLUMN_LAST_MODIFIED]
+  if (lastModified != null) {
+    formattedData[DocumentsContract.Document.COLUMN_LAST_MODIFIED] = lastModified
+    Log.d("SAF_CURSOR_ROW", "Added LAST_MODIFIED to formattedData: $lastModified")
+  }
+
   Log.d("SAF_CURSOR_ROW", "formattedData keys after: ${formattedData.keys}")
 
   return mapOf(

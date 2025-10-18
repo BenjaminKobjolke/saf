@@ -98,8 +98,9 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
               val uri = metadata["uri"] as String
               val name = fileData[DocumentsContract.Document.COLUMN_DISPLAY_NAME] as String?
               val mime = fileData[DocumentsContract.Document.COLUMN_MIME_TYPE] as String?
+              val lastModified = fileData[DocumentsContract.Document.COLUMN_LAST_MODIFIED] as Long?
 
-              Log.d("SAF_URI_DEBUG", "Found item #$totalItemsFound: name=$name, URI=$uri, isDirectory=$isDirectory, mime=$mime")
+              Log.d("SAF_URI_DEBUG", "Found item #$totalItemsFound: name=$name, URI=$uri, isDirectory=$isDirectory, mime=$mime, lastModified=$lastModified")
 
               // Add files and optionally folders
               if (isDirectory == true) {
@@ -111,7 +112,8 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
                     "uri" to uri,
                     "name" to displayName,
                     "isDirectory" to true,
-                    "mimeType" to mime
+                    "mimeType" to mime,
+                    "lastModified" to lastModified
                   )
                   childrenItems.add(item)
                   Log.d("SAF_URI_DEBUG", "  -> Added directory to results! name=$displayName")
@@ -133,7 +135,8 @@ internal class DocumentsContractApi(private val plugin: SafPlugin) :
                     "uri" to uri,
                     "name" to displayName,
                     "isDirectory" to false,
-                    "mimeType" to mime
+                    "mimeType" to mime,
+                    "lastModified" to lastModified
                   )
                   childrenItems.add(item)
                   Log.d("SAF_URI_DEBUG", "  -> Added file to results! name=$displayName")
